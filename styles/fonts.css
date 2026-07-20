@@ -1,0 +1,10 @@
+@font-face {
+  font-family: "Identify";
+  src: url("/fonts/identify-font/IdentifyDemoRegular-eZ6Bp.ttf")
+    format("truetype");
+  font-display: swap;
+}
+
+.font-identify {
+  font-family: "Identify", sans-serif;
+}
