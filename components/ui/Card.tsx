@@ -19,6 +19,13 @@ type Visibility = "all" | "mobile-tablet" | "hidden";
 type BaseCardProps = {
   children?: ReactNode;
   /**
+   * Quando `true`, indica que ambos os cards (LeftCard + RightCard) estão
+   * visíveis lado a lado. Neste caso a animação de entrada muda de vertical
+   * (y: -60 → 0) para horizontal — LeftCard vem da esquerda (x: -60),
+   * RightCard vem da direita (x: 60).
+   */
+  paired?: boolean;
+  /**
    * Classes extras aplicadas na caixa externa do Card (largura, margem,
    * visibilidade responsiva como "hidden lg:block" etc).
    *
@@ -49,6 +56,8 @@ type CardProps =
       autoplayInterval?: number;
       /** Texto alternativo por slide, para leitores de tela */
       imageAlts?: string[];
+      /** Legendas exibidas na borda inferior do card */
+      captions?: string[];
     });
 
 const CAROUSEL_AUTOPLAY_MS = 4000;
@@ -202,6 +211,7 @@ const Carousel = memo(function Carousel({
   visible = "all",
   full = false,
   autoplayInterval = CAROUSEL_AUTOPLAY_MS,
+  captions,
 }: {
   images: string[];
   imageAlts?: string[];
@@ -209,6 +219,7 @@ const Carousel = memo(function Carousel({
   visible?: Visibility;
   full?: boolean;
   autoplayInterval?: number;
+  captions?: string[];
 }) {
   const slides = useMemo(
     () => (images.length > 0 ? images : FALLBACK_IMAGES),
@@ -324,11 +335,6 @@ const Carousel = memo(function Carousel({
         Slide {index + 1} de {slides.length}
       </span>
 
-      <div
-        aria-hidden="true"
-        className="absolute inset-0 bg-linear-to-t from-background via-background/30 to-transparent"
-      />
-
       {slides.length > 1 && (
         <>
           <button
@@ -353,22 +359,47 @@ const Carousel = memo(function Carousel({
             </span>
           </button>
 
-          <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-1.5">
-            {slides.map((_, i) => (
-              <button
-                key={i}
-                type="button"
-                aria-label={`Ir para slide ${i + 1}`}
-                aria-current={i === index}
-                onClick={() => goTo(i)}
-                className={clsx(
-                  "size-1.5 rounded-full transition-colors",
-                  i === index ? "bg-white" : "bg-white/40",
-                )}
-              />
-            ))}
-          </div>
+          {!captions && (
+            <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-1.5">
+              {slides.map((_, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  aria-label={`Ir para slide ${i + 1}`}
+                  aria-current={i === index}
+                  onClick={() => goTo(i)}
+                  className={clsx(
+                    "size-1.5 rounded-full transition-colors",
+                    i === index ? "bg-white" : "bg-white/40",
+                  )}
+                />
+              ))}
+            </div>
+          )}
         </>
+      )}
+
+      {captions && captions[index] && (
+        <div className="absolute bottom-0 left-0 right-0 border-t border-foreground/10 bg-background/55 backdrop-blur-md px-6 py-3 sm:px-8">
+          {slides.length > 1 && (
+            <div className="flex gap-1.5 pb-2">
+              {slides.map((_, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  aria-label={`Ir para slide ${i + 1}`}
+                  aria-current={i === index}
+                  onClick={() => goTo(i)}
+                  className={clsx(
+                    "size-1.5 rounded-full transition-colors",
+                    i === index ? "bg-foreground" : "bg-foreground/30",
+                  )}
+                />
+              ))}
+            </div>
+          )}
+          <p className="text-sm text-foreground/80">{captions[index]}</p>
+        </div>
       )}
     </div>
   );
@@ -404,6 +435,7 @@ function CardContent(props: CardProps) {
           <Carousel
             images={props.images ?? []}
             imageAlts={props.imageAlts}
+            captions={props.captions}
             autoplayInterval={props.autoplayInterval}
             visible={visible}
             full
@@ -412,12 +444,15 @@ function CardContent(props: CardProps) {
           <Carousel
             images={props.images ?? []}
             imageAlts={props.imageAlts}
+            captions={props.captions}
             autoplayInterval={props.autoplayInterval}
             visible={visible}
           />
         ) : null}
 
-        <CardBody full={isCarouselFull}>{children}</CardBody>
+        {children ? (
+          <CardBody full={isCarouselFull}>{children}</CardBody>
+        ) : null}
       </>
     );
   }
@@ -442,12 +477,21 @@ function CardContent(props: CardProps) {
 
 function buildCard(align: "left" | "right", props: CardProps) {
   const alignClass = align === "left" ? "ml-auto mr-0" : "mr-auto ml-0";
+  const paired = props.paired === true;
+
+  const initial = paired
+    ? { opacity: 0, x: align === "left" ? -60 : 60 }
+    : { opacity: 0, y: -60 };
+
+  const animate = paired
+    ? { opacity: 1, x: 0 }
+    : { opacity: 1, y: 0 };
 
   return (
     <motion.div
       className={clsx("flex flex-col", props.className)}
-      initial={{ opacity: 0, y: -60 }}
-      animate={{ opacity: 1, y: 0 }}
+      initial={initial}
+      animate={animate}
       transition={{ duration: 0.5, ease: "easeOut" }}
     >
       <Card className={clsx(alignClass, SIDE_CARD_LAYOUT)}>

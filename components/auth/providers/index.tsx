@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { Button, Spinner } from "@heroui/react";
+import { Button } from "@heroui/react";
 
 import { auth } from "@/lib/auth";
+import { useAuthLoading } from "@/components/auth/loading";
 
 import { BrandIcon } from "./icon";
 import { PROVIDERS } from "./providers";
@@ -14,18 +15,22 @@ export function AuthProviders({
   actives,
   callbackURL,
 }: AuthProvidersProps) {
-  const [loading, setLoading] = useState<Provider | null>(null);
+  const [loading, setLocalLoading] = useState<Provider | null>(null);
+  const { setLoading } = useAuthLoading();
 
   const signIn = async (provider: Provider) => {
-    try {
-      setLoading(provider);
+    setLocalLoading(provider);
+    setLoading(true);
 
-      await auth.signIn.social({
-        provider,
-        callbackURL,
-      });
-    } finally {
-      setLoading(null);
+    const result = await auth.signIn.social({
+      provider,
+      callbackURL,
+    });
+
+    if (result?.error) {
+      console.error("Erro no login social (Better Auth):", result.error);
+      setLoading(false);
+      setLocalLoading(null);
     }
   };
 
@@ -54,20 +59,13 @@ export function AuthProviders({
             key={provider}
             variant="outline"
             isDisabled={!active || loading !== null}
-            className="w-full justify-center gap-3 rounded-lg"
+            className="w-full justify-center gap-3 rounded-lg hover:bg-primary"
             onPress={() => signIn(provider)}
           >
-            {isLoading ? (
-              <Spinner
-                size="sm"
-                color="current"
-              />
-            ) : (
-              <BrandIcon
-                provider={provider}
-                className="h-5 w-5 text-foreground"
-              />
-            )}
+            <BrandIcon
+              provider={provider}
+              className="h-5 w-5 text-foreground"
+            />
 
             {isLoading
               ? "Conectando..."

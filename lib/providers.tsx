@@ -2,6 +2,7 @@
 
 import { ThemeProvider } from "next-themes";
 import { ViewTransition } from "react";
+import { AuthLoadingProvider } from "@/components/auth/loading";
 
 function Providers({
   children,
@@ -15,12 +16,14 @@ function Providers({
       enableSystem
       disableTransitionOnChange
     >
-      <ViewTransition>
-        <div className="relative z-10 flex min-h-screen flex-col">
-          <main className="flex-1">{children}</main>
-          {/*<Footer />*/}
-        </div>
-      </ViewTransition>
+      <AuthLoadingProvider>
+        <ViewTransition>
+          <div className="relative z-10 flex min-h-screen flex-col">
+            <main className="flex-1">{children}</main>
+            {/*<Footer />*/}
+          </div>
+        </ViewTransition>
+      </AuthLoadingProvider>
     </ThemeProvider>
   );
 }

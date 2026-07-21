@@ -10,8 +10,13 @@ import {
   Link,
   TextField,
 } from "@heroui/react";
-import { AlertCircle, Eye, EyeOff, Lock, Mail } from "lucide-react";
+import { Eye, EyeOff, Lock, Mail } from "lucide-react";
+import { motion, useAnimation } from "framer-motion";
 import { auth } from "@/lib/auth";
+import { useAuthLoading } from "@/components/auth/loading";
+
+const shakeKeyframes = { x: [0, -8, 8, -8, 8, -4, 4, 0] };
+const shakeTransition = { duration: 0.4, ease: "easeInOut" as const };
 
 type FormErrors = {
   usernameOrEmail?: string;
@@ -26,9 +31,20 @@ export function SignIn({ callback }: AuthSignInProps) {
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(true);
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
-  const [authError, setAuthError] = useState<string | null>(null);
+
+  const { isLoading: loading, setLoading } = useAuthLoading();
+  const usernameControls = useAnimation();
+  const passwordControls = useAnimation();
+
+  const triggerShake = (fields: Array<keyof FormErrors>) => {
+    if (fields.includes("usernameOrEmail")) {
+      usernameControls.start({ ...shakeKeyframes, transition: shakeTransition });
+    }
+    if (fields.includes("password")) {
+      passwordControls.start({ ...shakeKeyframes, transition: shakeTransition });
+    }
+  };
 
   useEffect(() => {
     if (session?.user) {
@@ -47,7 +63,6 @@ export function SignIn({ callback }: AuthSignInProps) {
     React.ComponentProps<"form">["onSubmit"]
   > = async (event) => {
     event.preventDefault();
-    setAuthError(null);
 
     const nextErrors: FormErrors = {};
     if (!usernameOrEmail.trim()) {
@@ -58,6 +73,7 @@ export function SignIn({ callback }: AuthSignInProps) {
     }
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length) {
+      triggerShake(Object.keys(nextErrors) as Array<keyof FormErrors>);
       return;
     }
 
@@ -80,30 +96,40 @@ export function SignIn({ callback }: AuthSignInProps) {
           });
 
       if (result?.error) {
-        setAuthError(
-          result.error.message ??
-            "Não foi possível entrar. Verifique seus dados e tente novamente.",
-        );
+        // eslint-disable-next-line no-console
+        console.error("Erro de login (Better Auth):", result.error);
+
+        // Importante: o Better Auth retorna um erro genérico (401/UNAUTHORIZED)
+        // tanto para "usuário não existe" quanto para "senha errada", de propósito,
+        // pra evitar que alguém descubra quais e-mails/usernames existem testando
+        // senhas aleatórias (user enumeration). Por isso NÃO dá pra (nem deve)
+        // diferenciar qual campo está errado — mostramos uma mensagem genérica.
+        const message =
+          result.error.message ||
+          "Username/e-mail ou senha incorretos.";
+
+        setErrors({
+          usernameOrEmail: message,
+          password: message,
+        });
+        triggerShake(["usernameOrEmail", "password"]);
+        setLoading(false);
+        return;
       }
-    } catch {
-      setAuthError("Não foi possível conectar. Tente novamente em instantes.");
-    } finally {
+    } catch (err) {
+      console.error("Erro de conexão no login:", err);
+      const connMessage = "Não foi possível conectar. Tente novamente em instantes.";
+      setErrors({
+        usernameOrEmail: connMessage,
+        password: connMessage,
+      });
+      triggerShake(["usernameOrEmail", "password"]);
       setLoading(false);
     }
   };
 
   return (
     <main className="flex h-full w-full flex-col gap-5 mt-4">
-      {authError ? (
-        <div
-          role="alert"
-          className="flex items-start gap-2 rounded-lg border border-danger-200 bg-danger-50 px-3 py-2 text-sm text-danger-600"
-        >
-          <AlertCircle className="mt-0.5 size-4 shrink-0" />
-          <span>{authError}</span>
-        </div>
-      ) : null}
-
       <form onSubmit={handleSubmit} className="flex w-full flex-col gap-4" noValidate>
         {/* Username ou e-mail — input 100% customizado, sem usar o InputGroup padrão */}
         <TextField
@@ -113,15 +139,21 @@ export function SignIn({ callback }: AuthSignInProps) {
           isDisabled={loading}
           className="w-full"
         >
-          <Label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-default-500">
+          <Label
+            className={[
+              "mb-1.5 block text-xs font-medium uppercase tracking-wide transition-colors",
+              errors.usernameOrEmail ? "text-red-600" : "text-default-500",
+            ].join(" ")}
+          >
             Username ou e-mail
           </Label>
-          <div
+          <motion.div
+            animate={usernameControls}
             className={[
-              "group flex w-full items-center gap-2.5 rounded-xl border bg-content2/40 px-3.5 py-3 transition-all duration-150",
+              "group flex w-full items-center gap-2.5 rounded-xl border px-3.5 py-3 transition-all duration-150",
               errors.usernameOrEmail
-                ? "border-danger-400 focus-within:border-danger-500 focus-within:ring-2 focus-within:ring-danger-500/20"
-                : "border-default-200 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 hover:border-default-300",
+                ? "border-red-500 bg-transparent focus-within:border-red-500 focus-within:ring-2 focus-within:ring-red-500/20"
+                : "border-default-200 bg-content2/40 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 hover:border-default-300",
               loading ? "opacity-60" : "",
             ].join(" ")}
           >
@@ -129,7 +161,7 @@ export function SignIn({ callback }: AuthSignInProps) {
               className={[
                 "size-4 shrink-0 transition-colors",
                 errors.usernameOrEmail
-                  ? "text-danger-500"
+                  ? "text-red-500"
                   : "text-default-400 group-focus-within:text-primary",
               ].join(" ")}
             />
@@ -140,12 +172,17 @@ export function SignIn({ callback }: AuthSignInProps) {
               autoComplete="username"
               disabled={loading}
               value={usernameOrEmail}
-              onChange={(e) => setUsernameOrEmail(e.target.value)}
+              onChange={(e) => {
+                setUsernameOrEmail(e.target.value);
+                if (errors.usernameOrEmail) {
+                  setErrors((prev) => ({ ...prev, usernameOrEmail: undefined }));
+                }
+              }}
               className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-default-400 disabled:cursor-not-allowed"
             />
-          </div>
-          {errors.usernameOrEmail ? (
-            <Description className="mt-1.5 block text-xs text-danger-600">
+          </motion.div>
+          {errors.usernameOrEmail && errors.usernameOrEmail.trim() ? (
+            <Description className="mt-1.5 block text-xs font-medium text-red-600">
               {errors.usernameOrEmail}
             </Description>
           ) : null}
@@ -160,15 +197,21 @@ export function SignIn({ callback }: AuthSignInProps) {
             isDisabled={loading}
             className="w-full"
           >
-            <Label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-default-500">
+            <Label
+              className={[
+                "mb-1.5 block text-xs font-medium uppercase tracking-wide transition-colors",
+                errors.password ? "text-red-600" : "text-default-500",
+              ].join(" ")}
+            >
               Senha
             </Label>
-            <div
+            <motion.div
+              animate={passwordControls}
               className={[
-                "group flex w-full items-center gap-2.5 rounded-xl border bg-content2/40 px-3.5 py-3 transition-all duration-150",
+                "group flex w-full items-center gap-2.5 rounded-xl border px-3.5 py-3 transition-all duration-150",
                 errors.password
-                  ? "border-danger-400 focus-within:border-danger-500 focus-within:ring-2 focus-within:ring-danger-500/20"
-                  : "border-default-200 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 hover:border-default-300",
+                  ? "border-red-500 bg-transparent focus-within:border-red-500 focus-within:ring-2 focus-within:ring-red-500/20"
+                  : "border-default-200 bg-content2/40 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 hover:border-default-300",
                 loading ? "opacity-60" : "",
               ].join(" ")}
             >
@@ -176,7 +219,7 @@ export function SignIn({ callback }: AuthSignInProps) {
                 className={[
                   "size-4 shrink-0 transition-colors",
                   errors.password
-                    ? "text-danger-500"
+                    ? "text-red-500"
                     : "text-default-400 group-focus-within:text-primary",
                 ].join(" ")}
               />
@@ -187,13 +230,23 @@ export function SignIn({ callback }: AuthSignInProps) {
                 autoComplete="current-password"
                 disabled={loading}
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  if (errors.password) {
+                    setErrors((prev) => ({ ...prev, password: undefined }));
+                  }
+                }}
                 className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-default-400 disabled:cursor-not-allowed"
               />
               <button
                 type="button"
                 aria-label={isPasswordVisible ? "Ocultar senha" : "Mostrar senha"}
-                className="shrink-0 text-default-400 outline-none transition-colors hover:text-default-600"
+                className={[
+                  "shrink-0 outline-none transition-colors",
+                  errors.password
+                    ? "text-red-500 hover:text-red-600"
+                    : "text-default-400 hover:text-default-600",
+                ].join(" ")}
                 onClick={() => setIsPasswordVisible((prev) => !prev)}
               >
                 {isPasswordVisible ? (
@@ -202,9 +255,9 @@ export function SignIn({ callback }: AuthSignInProps) {
                   <Eye className="size-4" />
                 )}
               </button>
-            </div>
-            {errors.password ? (
-              <Description className="mt-1.5 block text-xs text-danger-600">
+            </motion.div>
+            {errors.password && errors.password.trim() ? (
+              <Description className="mt-1.5 block text-xs font-medium text-red-600">
                 {errors.password}
               </Description>
             ) : null}

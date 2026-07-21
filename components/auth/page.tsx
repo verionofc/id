@@ -6,6 +6,20 @@ import { SignUp } from "./forms/sign-up";
 import { Ok } from "./ok";
 import { AuthProviders } from "./providers";
 
+
+const AuthComponents = ({ callback }: { callback: string }) => {
+  return (
+    <AuthProviders
+      callbackURL={callback}
+      providers={["discord", "github", "google"]}
+      actives={{
+        discord: false,
+        github: true,
+        google: false,
+      }}
+    />
+  )
+}
 export function AuthProviderPage({
   auth,
   callback,
@@ -14,6 +28,7 @@ export function AuthProviderPage({
     case "sign-up":
       return (
         <>
+          <AuthComponents callback={callback} />
           <Separator />
           <SignUp callback={callback} />
         </>
@@ -25,14 +40,7 @@ export function AuthProviderPage({
     default:
     return (
       <>
-        <AuthProviders
-          callbackURL={callback}
-          providers={["github", "google"]}
-          actives={{
-            github: true,
-            google: false,
-          }}
-        />
+        <AuthComponents callback={callback} />
         <Separator />
         <SignIn callback={callback} />
       </>
